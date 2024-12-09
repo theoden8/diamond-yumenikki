@@ -7,8 +7,9 @@ import shutil
 import subprocess
 import time
 import threading
-import re
 import random
+import re
+import json
 
 import numpy as np
 import cv2
@@ -51,6 +52,9 @@ class Game(object):
         self.running = False
         self.agent = KeySender()
         self.now = 0
+        self.now_time = time.time()
+        self.delta_t = 0
+        self.fps = 24
         self.pressed_keys = set()
         self.releasing_keys = set()
 
@@ -111,6 +115,12 @@ class Game(object):
             return self.last_geometry
 
     def step(self) -> None:
+        now_time = time.time()
+        self.delta_t = now_time - self.now_time
+        delta_delta_t = (1. / self.fps) - self.delta_t
+        if delta_delta_t > 0:
+            time.sleep(delta_delta_t)
+        self.now_time = now_time
         self.now += 1
         self.releasing_keys = set()
 
@@ -124,7 +134,7 @@ class Game(object):
                 width=geometry['width'],
                 height=geometry['height'],
             )))
-            frame = cv2.cvtColor(img, cv2.COLOR_BGRA2BGR)
+            frame = cv2.cvtColor(img, cv2.COLOR_BGRA2RGB)
             return keys, frame
 
     def screencast_loop(self) -> None:
@@ -138,15 +148,22 @@ class Game(object):
                 break
         print('SCREENCAST ON')
         start = time.time()
+        j = dict()
         while self.running:
             now = self.now
             keys, frame = self.capture_window()
-            cv2.putText(frame, str(keys), (50,50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
-            cv2.putText(frame, str(now), (250,50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
-            self.step()
             tmpfile = f'/tmp/capture-{os.getpid()}-{random.randint(0, int(1e12))}.jpg'
             PIL.Image.fromarray(frame).save(tmpfile)
             shutil.move(tmpfile, os.path.join(video_name, f'frame_{now:06d}.jpg'))
+            cv2.putText(frame, str(keys), (50,50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+            cv2.putText(frame, str(now), (250,50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+            PIL.Image.fromarray(frame).save(tmpfile)
+            shutil.move(tmpfile, os.path.join(video_name, f'image_{now:06d}.jpg'))
+            self.step()
+            j[now] = dict(
+                keys=keys,
+                elapsed=self.delta_t,
+            )
 #            cv2.imshow("Game Screencast", frame)
 #            if cv2.waitKey(1) & 0xFF == ord('q'):
 #                break
@@ -154,6 +171,10 @@ class Game(object):
                 print('now', now, now / (time.time() - start))
             if now == 2000:
                 self.running = False
+        tmpfile = f'/tmp/writejson-{os.getpid()}-{random.randint(0, int(1e12))}.json'
+        with open(tmpfile, 'w') as f:
+            json.dump(j, f)
+        shutil.move(tmpfile, os.path.join(video_name, f"actions.json"))
         cv2.destroyAllWindows()
         print('screencast done')
 
@@ -194,7 +215,7 @@ class Game(object):
         if key not in self.releasing_keys:
             self.releasing_keys.add(key)
 
-    def xev_parser(self, window_id: int):
+    def xev_parser(self, window_id: int) -> None:
         # Start xev with the given window ID
         # -id <window_id> attaches xev to that window
         process = subprocess.Popen(["xev", "-id", str(window_id), '-event', 'keyboard'],
@@ -270,9 +291,10 @@ class Game(object):
                 else:
                     current_action = None
                     self.set_key_release(keysym_name)
+        print('xev_server', window_id, 'done')
         process.terminate()
 
-    def capture(self):
+    def capture(self) -> None:
         threads = [
             threading.Thread(target=game.screencast_loop),
             threading.Thread(target=game.send_actions_loop),
