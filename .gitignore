@@ -1,0 +1,10 @@
+.cenv
+*.7z
+*.img
+*.iso
+*.qcow2
+*.pyc
+.*.swp
+.*.swo
+/yumenikki/
+/data
