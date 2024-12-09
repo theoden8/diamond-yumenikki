@@ -27,4 +27,5 @@ cd ~/yumenikki
 wine RPG_RT.exe
 # install wine-mono when prompted
 ```
-7. Run `python3 capture_data.py` in the home directory.
+7. Disable display power management or suspension in Settings > Power Management.
+8. Run `python3 capture_data.py` in the home directory.
