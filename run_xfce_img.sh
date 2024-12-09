@@ -80,7 +80,7 @@ else
 fi
 sudo add-apt-repository ppa:kisak/kisak-mesa -y
 sudo apt-get update
-sudo apt-get install -y curl wget dosbox python3-{dev,pip,xlib} rsync vim ncdu htop dfc xdotool mesa-utils mesa-vulkan-drivers libvulkan1 vulkan-tools x11-utils ffmpeg
+sudo apt-get install -y curl wget dosbox python3-{dev,pip,xlib} python-is-python3 rsync vim ncdu htop dfc xdotool mesa-utils mesa-vulkan-drivers libvulkan1 vulkan-tools x11-utils ffmpeg tree
 sudo apt install --install-recommends winehq-staging -y
 pip install --user numpy opencv-python bpython pillow scipy mss openai --break-system-packages
 EOF
@@ -92,9 +92,12 @@ EOF
             dweam@localhost:"/home/dweam/yumenikki2"
         rsync -auPz --rsh="sshpass -p dweam ssh -p $SSH_PORT -o PreferredAuthentications=password -o StrictHostKeyChecking=no -l dweam" "./capture_data_guest.py" dweam@localhost:"/home/dweam/capture_data.py"
         rsync -auPz --rsh="sshpass -p dweam ssh -p $SSH_PORT -o PreferredAuthentications=password -o StrictHostKeyChecking=no -l dweam" "./dpy_logger.py" dweam@localhost:"/home/dweam/dpy_logger.py"
-        rsync -auPz --rsh="sshpass -p dweam ssh -p $SSH_PORT -o PreferredAuthentications=password -o StrictHostKeyChecking=no -l dweam" dweam@localhost:"/home/dweam/keylog_server.py" "./"
+        rsync -auPz --rsh="sshpass -p dweam ssh -p $SSH_PORT -o PreferredAuthentications=password -o StrictHostKeyChecking=no -l dweam" dweam@localhost:"/home/dweam/capture_data_host.py" "./"
         rsync -auPz --rsh="sshpass -p dweam ssh -p $SSH_PORT -o PreferredAuthentications=password -o StrictHostKeyChecking=no -l dweam" dweam@localhost:"/home/dweam/data" "./"
-        rsync -auPz --rsh="sshpass -p dweam ssh -p $SSH_PORT -o PreferredAuthentications=password -o StrictHostKeyChecking=no -l dweam" ./data/ dweam@localhost:"/home/dweam/data/"
+        sshpass -p dweam ssh -X -p "$SSH_PORT" dweam@localhost -o PreferredAuthentications=password -o StrictHostKeyChecking=no <<EOF
+rm -rf /home/dweam/data
+EOF
+        rsync -av -f"+ */" -f"- *" --rsh="sshpass -p dweam ssh -p $SSH_PORT -o PreferredAuthentications=password -o StrictHostKeyChecking=no -l dweam" ./data dweam@localhost:"/home/dweam/data/"
         sshpass -p dweam ssh -X -p "$SSH_PORT" dweam@localhost -o PreferredAuthentications=password -o StrictHostKeyChecking=no <<EOF
 xfce4-terminal --maximize --display=:0
 EOF

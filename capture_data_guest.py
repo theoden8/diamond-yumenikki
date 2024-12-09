@@ -106,7 +106,7 @@ class Game(object):
             self.last_geometry = geometry
             return geometry
         except subprocess.CalledProcessError:
-            game.running = False
+            self.running = False
             return self.last_geometry
 
     def step(self) -> None:
@@ -136,9 +136,9 @@ class Game(object):
                 os.makedirs(video_name)
                 break
         print('SCREENCAST ON')
-        while game.running:
+        while self.running:
             now = self.now
-            keys, frame = game.capture_window()
+            keys, frame = self.capture_window()
             cv2.putText(frame, str(keys), (50,50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
             cv2.putText(frame, str(now), (250,50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
             self.step()
@@ -148,30 +148,39 @@ class Game(object):
 #            cv2.imshow("Game Screencast", frame)
 #            if cv2.waitKey(1) & 0xFF == ord('q'):
 #                break
+            if now % 100 == 0:
+                print('now', now)
+            if now == 2000:
+                self.running = False
+        cv2.destroyAllWindows()
+        print('screencast done')
 
-    def send_next_key(self) -> None:
-        key, wait_time, press = self.agent.get_key()
-        print('sending', key)
-        window_id = self.control_window_id
-        if press == 'single':
-            time.sleep(wait_time)
-            if key is not None:
-                r = subprocess.call(['xdotool', 'key', '--window', str(window_id), '--delay', '0', key])
-                if r != 0:
-                    self.running = False
-                    return
-        elif press == 'press':
-            if key is not None:
-                r = subprocess.call(['xdotool', 'keydown', '--window', str(window_id), key])
-                if r != 0:
-                    self.running = False
-                    return
-            time.sleep(wait_time)
-            if key is not None:
-                r = subprocess.call(['xdotool', 'keyup', '--window', str(window_id), key])
-                if r != 0:
-                    self.running = False
-                    return
+    def send_actions_loop(self) -> None:
+        time.sleep(10)
+        while self.running:
+            key, wait_time, press = self.agent.get_key()
+            print('sending', key)
+            window_id = self.control_window_id
+            if press == 'single':
+                time.sleep(wait_time)
+                if key is not None:
+                    r = subprocess.call(['xdotool', 'key', '--window', str(window_id), '--delay', '0', key])
+                    if r != 0:
+                        self.running = False
+                        return
+            elif press == 'press':
+                if key is not None:
+                    r = subprocess.call(['xdotool', 'keydown', '--window', str(window_id), key])
+                    if r != 0:
+                        self.running = False
+                        return
+                time.sleep(wait_time)
+                if key is not None:
+                    r = subprocess.call(['xdotool', 'keyup', '--window', str(window_id), key])
+                    if r != 0:
+                        self.running = False
+                        return
+        print('sendkeys done')
 
     def set_key_press(self, key: str) -> None:
         if key not in self.pressed_keys:
@@ -191,6 +200,8 @@ class Game(object):
                                    stderr=subprocess.PIPE,
                                    text=True,
                                    universal_newlines=True)
+        os.set_blocking(process.stdout.fileno(), False)
+        os.set_blocking(process.stderr.fileno(), False)
 
         # Regex patterns to identify key press/release lines
         key_press_pattern = re.compile(r"KeyPress event, serial \d+, synthetic .*, window 0x[0-9a-fA-F]+")
@@ -213,7 +224,7 @@ class Game(object):
         while self.running:
             line = process.stdout.readline()
             if not line:  # Process finished or no more output
-                break
+                continue
 
             line = line.strip()
 
@@ -257,31 +268,21 @@ class Game(object):
                 else:
                     current_action = None
                     self.set_key_release(keysym_name)
+        process.terminate()
 
+    def capture(self):
+        threads = [
+            threading.Thread(target=game.screencast_loop),
+            threading.Thread(target=game.send_actions_loop),
+            threading.Thread(target=game.xev_parser, args=(game.control_window_id,)),
+            threading.Thread(target=game.xev_parser, args=(game.screen_window_id,)),
+        ]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
 
-def screencast_thread(game):
-    game.screencast_loop()
-    cv2.destroyAllWindows()
-    sys.exit()
-
-
-def send_keys_thread(game):
-    # Example: send key presses every second
-    time.sleep(10)
-    while game.running:
-        game.send_next_key()
-
-
-def start_xev_control_thread(game):
-    t = threading.Thread(target=game.xev_parser, args=(game.control_window_id,))
-    t.start()
-    return t
-
-
-def start_xev_screen_thread(game):
-    t = threading.Thread(target=game.xev_parser, args=(game.screen_window_id,))
-    t.start()
-    return t
+        game.game_process.terminate()
 
 
 if __name__ == "__main__":
@@ -292,23 +293,4 @@ if __name__ == "__main__":
         window_name="YUME NIKKI",
     )
     game.launch()
-    # screen cast
-    screencast = threading.Thread(target=screencast_thread, args=(game,))
-    screencast.start()
-    # send keys
-    send_keys = threading.Thread(target=send_keys_thread, args=(game,))
-    send_keys.start()
-    # record keys
-    record_synthetic_keys = threading.Thread(target=start_xev_control_thread, args=(game,))
-    record_synthetic_keys.start()
-    record_user_keys = threading.Thread(target=start_xev_screen_thread, args=(game,))
-    record_user_keys.start()
-    # Wait for threads to finish
-    screencast.join()
-    send_keys.join()
-    record_synthetic_keys.join()
-    record_user_keys.join()
-    #record_keys.join()
-
-    # Wait for game process to finish
-    game.game_process.wait()
+    game.capture()
