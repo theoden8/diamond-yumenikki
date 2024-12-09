@@ -93,11 +93,11 @@ EOF
         rsync -auPz --rsh="sshpass -p dweam ssh -p $SSH_PORT -o PreferredAuthentications=password -o StrictHostKeyChecking=no -l dweam" "./capture_data_guest.py" dweam@localhost:"/home/dweam/capture_data.py"
         rsync -auPz --rsh="sshpass -p dweam ssh -p $SSH_PORT -o PreferredAuthentications=password -o StrictHostKeyChecking=no -l dweam" "./dpy_logger.py" dweam@localhost:"/home/dweam/dpy_logger.py"
         rsync -auPz --rsh="sshpass -p dweam ssh -p $SSH_PORT -o PreferredAuthentications=password -o StrictHostKeyChecking=no -l dweam" dweam@localhost:"/home/dweam/capture_data_host.py" "./"
-        rsync -auPz --rsh="sshpass -p dweam ssh -p $SSH_PORT -o PreferredAuthentications=password -o StrictHostKeyChecking=no -l dweam" dweam@localhost:"/home/dweam/data" "./"
+        rsync -auPz --rsh="sshpass -p dweam ssh -p $SSH_PORT -o PreferredAuthentications=password -o StrictHostKeyChecking=no -l dweam" dweam@localhost:"/home/dweam/data/" "./data/"
         sshpass -p dweam ssh -X -p "$SSH_PORT" dweam@localhost -o PreferredAuthentications=password -o StrictHostKeyChecking=no <<EOF
 rm -rf /home/dweam/data
 EOF
-        rsync -av -f"+ */" -f"- *" --rsh="sshpass -p dweam ssh -p $SSH_PORT -o PreferredAuthentications=password -o StrictHostKeyChecking=no -l dweam" ./data dweam@localhost:"/home/dweam/data/"
+        rsync -av -f"+ */" -f"- *" --rsh="sshpass -p dweam ssh -p $SSH_PORT -o PreferredAuthentications=password -o StrictHostKeyChecking=no -l dweam" ./data/ dweam@localhost:"/home/dweam/data/"
         sshpass -p dweam ssh -X -p "$SSH_PORT" dweam@localhost -o PreferredAuthentications=password -o StrictHostKeyChecking=no <<EOF
 xfce4-terminal --maximize --display=:0
 EOF
