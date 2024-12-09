@@ -8,6 +8,8 @@ DISK_SIZE="80G"
 VM_NAME="yume-nikki-vm"
 SSH_PORT=33022
 
+headless=0
+
 use_installer=$()
 if ! test -e "${VM_NAME}.qcow2"; then
   use_installer=1
@@ -60,7 +62,7 @@ if ! test -z $use_installer; then
 else
     echo "running system"
     {
-        socat TCP-LISTEN:21009,reuseaddr,fork TCP:localhost:21089 &
+        socat TCP-LISTEN:21090,reuseaddr,fork TCP:localhost:21089 &
         socat_pid=$!
     }
     {
@@ -98,11 +100,16 @@ EOF
 rm -rf /home/dweam/data
 EOF
         rsync -av -f"+ */" -f"- *" --rsh="sshpass -p dweam ssh -p $SSH_PORT -o PreferredAuthentications=password -o StrictHostKeyChecking=no -l dweam" ./data/ dweam@localhost:"/home/dweam/data/"
+        extra_xfce_args=
+        if test "$headless" -eq 1; then
+            extra_xfce_args=<<EOF
+EOF
+        fi
         sshpass -p dweam ssh -X -p "$SSH_PORT" dweam@localhost -o PreferredAuthentications=password -o StrictHostKeyChecking=no <<EOF
 xfce4-terminal --maximize --display=:0
 EOF
     } &
-    qemu-system-x86_64 \
+    qemu_args="
       -name "$VM_NAME" \
       -qmp unix:qmp.sock,server=on,wait=off \
       -boot d \
@@ -112,6 +119,12 @@ EOF
       -smp 4 \
       -drive file=${VM_NAME}.qcow2,format=qcow2 \
       -vga virtio \
-      -display gtk,grab-on-hover=on \
-      -net nic -net user,hostfwd=tcp::33022-:22,hostfwd=tcp::21089-:21090; kill "$socat_pid"
+      -net nic -net user,hostfwd=tcp::33022-:22,hostfwd=tcp::21089-:21090
+"
+    if test "$headless" -eq 0; then
+        qemu_args="$qemu_args -display gtk,grab-on-hover=on"
+    else
+        qemu_args="$qemu_args -display None"
+    fi
+    qemu-system-x86_64 $(echo "$qemu_args");kill "$socat_pid"
 fi
