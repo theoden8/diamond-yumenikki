@@ -24,15 +24,16 @@ class KeySender:
         self.index = 0
         self.key_sequence = [
             #'alt+Return',
-            'space', 'space', 'space', 'space', 'space', 'space',
-            'space', 'space', 'space', 'space', 'space', 'space',
+            'space', None, 'space', None, 'space', None,
+            'space', None, 'space', None, 'space', None,
+            'space', None, 'space', None, 'space', None,
         ]
 
     def get_key(self):
         if self.index < len(self.key_sequence):
             key = self.key_sequence[self.index]
             self.index += 1
-            return key, 1., 'single'
+            return key, .3, 'press'
         key = random.choice([
             'Right', 'Left', 'Up', 'Down',
             'z', None
@@ -136,6 +137,7 @@ class Game(object):
                 os.makedirs(video_name)
                 break
         print('SCREENCAST ON')
+        start = time.time()
         while self.running:
             now = self.now
             keys, frame = self.capture_window()
@@ -149,7 +151,7 @@ class Game(object):
 #            if cv2.waitKey(1) & 0xFF == ord('q'):
 #                break
             if now % 100 == 0:
-                print('now', now)
+                print('now', now, now / (time.time() - start))
             if now == 2000:
                 self.running = False
         cv2.destroyAllWindows()
