@@ -5,11 +5,13 @@ import os
 import sys
 import shutil
 import subprocess
+import typing
 import time
 import threading
 import random
 import re
 import json
+import base64
 
 import numpy as np
 import cv2
@@ -19,27 +21,107 @@ import mss
 import Xlib
 import Xlib.display
 
+import openai
 
-class KeySender:
-    def __init__(self):
-        self.index = 0
-        self.key_sequence = [
-            #'alt+Return',
-            'space', None, 'space', None, 'space', None,
-            'space', None, 'space', None, 'space', None,
-            'space', None, 'space', None, 'space', None,
-        ]
 
-    def get_key(self):
+class Agent:
+    def __init__(self, skip_intro=False) -> None:
+        if skip_intro:
+            self.index = 0
+            self.key_sequence = [
+                #'alt+Return',
+                'space', None, 'space', None, 'space', None,
+                'space', None, 'space', None, 'space', None,
+                'space', None, 'space', None, 'space', None,
+                'space', None, 'space', None, 'space', None,
+            ]
+        else:
+            self.index = 0
+            self.key_sequence = []
+        self.llm_max_retries = 5
+        self.llm_retries = 0
+        try:
+            self.client = openai.OpenAI(
+                base_url="http://127.0.0.1:21090/v1",
+                api_key="-",
+            )
+            self.llm_retries = self.llm_max_retries
+        except Exception as e:
+            self.client = None
+
+    @staticmethod
+    def image_to_base64(image_path: str) -> bytes:
+        with PIL.Image.open(image_path) as img:
+            buffered = io.BytesIO()
+            img.save(buffered, format="PNG")
+            return base64.b64encode(buffered.getvalue()).decode('utf-8')
+
+    def get_random_keypress(self, no_skip=False):
+        for i in range(2):
+            key = random.choice([
+                'Right', 'Left', 'Up', 'Down',
+                'z', None,
+            ])
+            if no_skip and key is None:
+                continue
+            break
+        return key, random.uniform(0.1, 1.0), 'press'
+
+    def get_llm_keypress(self, frame_path: str):
+#        class Key(str, enum.Enum):
+#            up = "up"
+#            down = "down"
+#            left = "left"
+#            right = "right"
+#            interact = "z"
+#
+#        class Action(pydantic.BaseModel):
+#            key: Key
+#            duration: float
+
+#        keys = {
+#            Key.up: "Up",
+#            Key.down: "Down",
+#            Key.left: "Left",
+#            Key.right: "Right",
+#            Key.interact: 'z',
+#        }
+        action_keys = dict(
+            up="Up", down="Down", left="Left", right="Right",
+            interact="z",
+        )
+        try:
+            completion = self.client.chat.completions.create(
+                model="llm",
+                temperature=0.9,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": "Which button would you press playing the Yume Nikki game given this screenshot?\n"},
+                            {"type": "image_url", "image_url": {"url": f'data:image/png;base64,{image_to_base64(frame_path)}'}},
+                        ],
+                    },
+                ],
+                request_timeout=3.,
+                extra_body={"guided_choice": list(action_keys.keys())},
+            )
+            key = action_keys[completion.choices[0].message.content]
+            self.llm_retries = self.llm_max_retries
+            return key, random.uniform(0.1, 1.0), 'press'
+        except Exception as e:
+            self.llm_retries -= 1
+            return self.get_random_keypress()
+
+    def get_key(self, frame_path: typing.Optional[str]):
         if self.index < len(self.key_sequence):
             key = self.key_sequence[self.index]
             self.index += 1
             return key, .3, 'press'
-        key = random.choice([
-            'Right', 'Left', 'Up', 'Down',
-            'z', None
-        ])
-        return key, random.uniform(0.1, 1.0), 'press'
+        return self.get_random_keypress()
+#        if self.llm_retries <= 0 or frame_path is None:
+#            return self.get_random_keypress()
+#        return self.get_llm_keypress(frame_path=frame_path)
 
 
 class Game(object):
@@ -50,13 +132,14 @@ class Game(object):
         self.game_process = None
         self.screen_window_id, self.control_window_id = None, None
         self.running = False
-        self.agent = KeySender()
+        self.agent = Agent(skip_intro=self.recording)
         self.now = 0
         self.now_time = time.time()
         self.delta_t = 0
         self.fps = 24
         self.pressed_keys = set()
         self.releasing_keys = set()
+        self.frame_path = None
 
     def attach(self) -> None:
         while not self.screen_window_id or not self.control_window_id:
@@ -150,11 +233,15 @@ class Game(object):
         start = time.time()
         j = dict()
         while self.running:
+            if not self.recording:
+                continue
             now = self.now
             keys, frame = self.capture_window()
             tmpfile = f'/tmp/capture-{os.getpid()}-{random.randint(0, int(1e12))}.jpg'
             PIL.Image.fromarray(frame).save(tmpfile)
-            shutil.move(tmpfile, os.path.join(video_name, f'frame_{now:06d}.jpg'))
+            frame_path = os.path.join(video_name, f'frame_{now:06d}.jpg')
+            shutil.move(tmpfile, frame_path)
+            self.frame_path = frame_path
             cv2.putText(frame, str(keys), (50,50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
             cv2.putText(frame, str(now), (250,50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
             PIL.Image.fromarray(frame).save(tmpfile)
@@ -169,7 +256,7 @@ class Game(object):
 #                break
             if now % 100 == 0:
                 print('now', now, now / (time.time() - start))
-            if now == 2000:
+            if now == 200000:
                 self.running = False
         tmpfile = f'/tmp/writejson-{os.getpid()}-{random.randint(0, int(1e12))}.json'
         with open(tmpfile, 'w') as f:
@@ -179,9 +266,9 @@ class Game(object):
         print('screencast done')
 
     def send_actions_loop(self) -> None:
-        time.sleep(10)
+        time.sleep(3)
         while self.running:
-            key, wait_time, press = self.agent.get_key()
+            key, wait_time, press = self.agent.get_key(frame_path=self.frame_path)
             print('sending', key)
             window_id = self.control_window_id
             if press == 'single':
