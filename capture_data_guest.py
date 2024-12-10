@@ -131,6 +131,8 @@ class Game(object):
         self.window_name = window_name
         self.game_process = None
         self.screen_window_id, self.control_window_id = None, None
+        self.key_record = 't'
+        self.recording = False
         self.running = False
         self.agent = Agent(skip_intro=self.recording)
         self.now = 0
@@ -258,6 +260,7 @@ class Game(object):
                 print('now', now, now / (time.time() - start))
             if now == 200000:
                 self.running = False
+                self.recording = False
         tmpfile = f'/tmp/writejson-{os.getpid()}-{random.randint(0, int(1e12))}.json'
         with open(tmpfile, 'w') as f:
             json.dump(j, f)
@@ -268,6 +271,8 @@ class Game(object):
     def send_actions_loop(self) -> None:
         time.sleep(3)
         while self.running:
+            if not self.recording:
+                continue
             key, wait_time, press = self.agent.get_key(frame_path=self.frame_path)
             print('sending', key)
             window_id = self.control_window_id
@@ -293,10 +298,15 @@ class Game(object):
         print('sendkeys done')
 
     def set_key_press(self, key: str) -> None:
-        if key not in self.pressed_keys:
+        if key == self.key_record:
+            self.recording = True
+            return
+        elif self.recording and key not in self.pressed_keys:
             self.pressed_keys.add(key)
 
     def set_key_release(self, key: str) -> None:
+        if not self.recording or key == self.key_record:
+            return
         if key in self.pressed_keys:
             self.pressed_keys.remove(key)
         if key not in self.releasing_keys:
