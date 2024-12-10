@@ -62,10 +62,6 @@ if ! test -z $use_installer; then
 else
     echo "running system"
     {
-        socat TCP-LISTEN:21090,reuseaddr,fork TCP:localhost:21089 &
-        socat_pid=$!
-    }
-    {
         sleep 10
         sshpass -p dweam ssh -p "$SSH_PORT" dweam@localhost -o PreferredAuthentications=password -o StrictHostKeyChecking=no <<EOF
 set -ex
@@ -89,26 +85,24 @@ EOF
         rsync -auPz --rsh="sshpass -p dweam ssh -p $SSH_PORT -o PreferredAuthentications=password -o StrictHostKeyChecking=no -l dweam" \
             "/home/admin/.var/app/com.valvesoftware.Steam/.local/share/Steam/steamapps/common/Yume Nikki/yumenikki" \
             dweam@localhost:"/home/dweam/"
-        rsync -auPz --rsh="sshpass -p dweam ssh -p $SSH_PORT -o PreferredAuthentications=password -o StrictHostKeyChecking=no -l dweam" \
-            "./yumenikki/" \
-            dweam@localhost:"/home/dweam/yumenikki2"
         rsync -auPz --rsh="sshpass -p dweam ssh -p $SSH_PORT -o PreferredAuthentications=password -o StrictHostKeyChecking=no -l dweam" "./capture_data_guest.py" dweam@localhost:"/home/dweam/capture_data.py"
         rsync -auPz --rsh="sshpass -p dweam ssh -p $SSH_PORT -o PreferredAuthentications=password -o StrictHostKeyChecking=no -l dweam" "./dpy_logger.py" dweam@localhost:"/home/dweam/dpy_logger.py"
         rsync -auPz --rsh="sshpass -p dweam ssh -p $SSH_PORT -o PreferredAuthentications=password -o StrictHostKeyChecking=no -l dweam" dweam@localhost:"/home/dweam/capture_data_host.py" "./"
-        rsync -auPz --rsh="sshpass -p dweam ssh -p $SSH_PORT -o PreferredAuthentications=password -o StrictHostKeyChecking=no -l dweam" dweam@localhost:"/home/dweam/data/" "./data/"
-        sshpass -p dweam ssh -X -p "$SSH_PORT" dweam@localhost -o PreferredAuthentications=password -o StrictHostKeyChecking=no <<EOF
-rm -rf /home/dweam/data
-EOF
         rsync -av -f"+ */" -f"- *" --rsh="sshpass -p dweam ssh -p $SSH_PORT -o PreferredAuthentications=password -o StrictHostKeyChecking=no -l dweam" ./data/ dweam@localhost:"/home/dweam/data/"
         extra_xfce_args=
         if test "$headless" -eq 1; then
             extra_xfce_args=<<EOF
 EOF
         fi
+        sshpass -p dweam ssh -p "$SSH_PORT" dweam@localhost -o PreferredAuthentications=password -o StrictHostKeyChecking=no -R 21090:localhost:21090 &
+        sshport_pid=$!
         sshpass -p dweam ssh -X -p "$SSH_PORT" dweam@localhost -o PreferredAuthentications=password -o StrictHostKeyChecking=no <<EOF
-xfce4-terminal --maximize --display=:0
+nohup xfce4-terminal --maximize --display=:0 &
 EOF
+        # periodically pull data
+        watch -n 150 "rsync -auPz --remove-source-files --rsh='sshpass -p dweam ssh -p $SSH_PORT -o PreferredAuthentications=password -o StrictHostKeyChecking=no -l dweam' dweam@localhost:'/home/dweam/data/' './data/'"
     } &
+    control_pid=$!
     qemu_args="
       -name "$VM_NAME" \
       -qmp unix:qmp.sock,server=on,wait=off \
@@ -119,12 +113,12 @@ EOF
       -smp 4 \
       -drive file=${VM_NAME}.qcow2,format=qcow2 \
       -vga virtio \
-      -net nic -net user,hostfwd=tcp::33022-:22,hostfwd=tcp::21089-:21090
+      -net nic -net user,hostfwd=tcp::33022-:22
 "
     if test "$headless" -eq 0; then
         qemu_args="$qemu_args -display gtk,grab-on-hover=on"
     else
         qemu_args="$qemu_args -display None"
     fi
-    qemu-system-x86_64 $(echo "$qemu_args");kill "$socat_pid"
+    qemu-system-x86_64 $(echo "$qemu_args");kill "$sshport_pid"; "$control_pid"
 fi
