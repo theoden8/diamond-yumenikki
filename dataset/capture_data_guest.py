@@ -269,7 +269,7 @@ class Game(object):
         print('screencast done')
 
     def send_actions_loop(self) -> None:
-        time.sleep(3)
+        time.sleep(10)
         while self.running:
             if not self.recording:
                 continue
