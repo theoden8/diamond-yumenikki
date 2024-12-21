@@ -90,14 +90,13 @@ class Game:
 				# screen.blit(surface, (x_center - w // 2, y_center + self.height // 2))
 
 		def reset():
-			nonlocal obs, info, do_reset, ep_return, ep_length, keys_pressed, l_click, r_click, steering_value
+			nonlocal obs, info, do_reset, ep_return, ep_length, keys_pressed, l_click, r_click
 			obs, info = self.env.reset()
 			pygame.event.clear()
 			do_reset = False
 			ep_return = 0
 			ep_length = 0
 			keys_pressed = []
-			steering_value = 0.0
 			map_id = 0
 			l_click = r_click = False
 
@@ -173,13 +172,7 @@ class Game:
 			if do_wait and not do_one_step:
 				continue
 
-			steering_value = 0.0
-			if pygame.K_LEFT in keys_pressed:
-				steering_value = -1.0
-			elif pygame.K_RIGHT in keys_pressed:
-				steering_value = 1.0
-				
-			csgo_action = CSGOAction(keys_pressed, steering_value)
+			csgo_action = CSGOAction(keys_pressed)
 			next_obs, rew, end, trunc, info = self.env.step(csgo_action)
 
 			ep_return += rew.item()
