@@ -1,4 +1,9 @@
-# installing VM
+# DIAMOND Yume Nikki
+
+* [dataset](https://huggingface.co/theoden8/DIAMOND-yume-nikki/)
+* [model](https://huggingface.co/theoden8/DIAMOND-yume-nikki)
+
+## installing VM
 
 (go to ./dataset)
 
@@ -34,7 +39,7 @@ wine RPG_RT.exe
 
 To start recording, press 't'. This will generate `./data/video_{id:04d}/` which will be periodically rsync'ed to host to free up space on the VM.
 
-# training
+## training
 
 1. Create dweam conda environment and add it as ipython kernel accessible in jupyter.
 2. Run `YN-Dataset.ipynb` (so that dataset is created)
