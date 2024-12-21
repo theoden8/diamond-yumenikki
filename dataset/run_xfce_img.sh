@@ -86,7 +86,6 @@ EOF
             "/home/admin/.var/app/com.valvesoftware.Steam/.local/share/Steam/steamapps/common/Yume Nikki/yumenikki" \
             dweam@localhost:"/home/dweam/"
         rsync -auPz --rsh="sshpass -p dweam ssh -p $SSH_PORT -o PreferredAuthentications=password -o StrictHostKeyChecking=no -l dweam" "./capture_data_guest.py" dweam@localhost:"/home/dweam/capture_data.py"
-        rsync -auPz --rsh="sshpass -p dweam ssh -p $SSH_PORT -o PreferredAuthentications=password -o StrictHostKeyChecking=no -l dweam" "./dpy_logger.py" dweam@localhost:"/home/dweam/dpy_logger.py"
         rsync -auPz --rsh="sshpass -p dweam ssh -p $SSH_PORT -o PreferredAuthentications=password -o StrictHostKeyChecking=no -l dweam" dweam@localhost:"/home/dweam/capture_data_host.py" "./"
         rsync -av -f"+ */" -f"- *" --rsh="sshpass -p dweam ssh -p $SSH_PORT -o PreferredAuthentications=password -o StrictHostKeyChecking=no -l dweam" ./data/ dweam@localhost:"/home/dweam/data/"
         extra_xfce_args=
